@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,7 +22,7 @@ func main() {
 	prompt := &survey.Select{
 		Renderer: survey.Renderer{},
 		Message:  "Please select one",
-		Options:  []string{"make a link", "decrypt a link"},
+		Options:  []string{"make a link", "decrypt a link", "settings"},
 		Help:     "literally just 2 options",
 		PageSize: 0,
 	}
@@ -30,6 +34,8 @@ func main() {
 		encrypt()
 	case "decrypt a link":
 		decrypt()
+	case "settings":
+		settings()
 	}
 
 }
@@ -217,10 +223,38 @@ func decryptor(processed_url string, encryption_hash_full int, encryption_key st
 	println("this is your decrypted URL")
 	println("<====================>")
 
-	err := opener(decrypted_url)
+	settingsFile, err := settingsOpener()
 	if err != nil {
 		return err
 	}
+
+	settings, err := os.OpenFile(settingsFile, os.O_RDONLY, 0644)
+	if err != nil {
+		log.Fatalf("failed to open file: %v", err)
+	}
+	defer settings.Close()
+
+	autoOpenLinks := false
+	scanner := bufio.NewScanner(settings)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "auto open links") {
+			autoOpenLinks = true
+			break
+		}
+	}
+
+	if autoOpenLinks {
+		err := opener(decrypted_url)
+		if err != nil {
+			return err
+		}
+		println("auto open links is on")
+	} else {
+		println("auto open links is off")
+	}
+
+	// works !!!!!! 😎💀
 
 	return nil
 }
@@ -240,4 +274,57 @@ func opener(decrypted_url string) error {
 	browser.OpenURL(decrypted_url)
 
 	return nil
+}
+
+func settings() {
+
+	settingsFile, err := settingsOpener()
+
+	list_of_settings := []string{}
+
+	setting_prompt := &survey.MultiSelect{
+		Renderer: survey.Renderer{},
+		Message:  "the few settings i can bother coding in",
+		Options:  []string{"auto open links"},
+		Default:  nil,
+		Help:     "choose which settings to enable, this is the laziest options menu so all of them reset if you don't turn them on", // this is 😅
+		PageSize: 0,
+	}
+
+	survey.AskOne(setting_prompt, &list_of_settings)
+
+	settings, err := os.OpenFile(settingsFile, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("failed to open file: %v", err)
+	}
+
+	err = settings.Truncate(0)
+	if err != nil {
+		log.Fatalf("failed to truncate file: %v", err)
+	}
+
+	if _, err := settings.WriteString(strings.Join(list_of_settings, "\n")); err != nil {
+		log.Fatalf("failed to write to file: %v", err)
+	}
+
+	defer settings.Close()
+}
+
+func settingsOpener() (string, error) {
+	settingsFile := ""
+
+	homePath := os.Getenv("HOMEPATH")
+	if homePath == "" {
+		log.Fatalf("HOMEPATH environment variable not set")
+	}
+	kcoderDir := filepath.Join(homePath, "Kcoder")
+	settingsFile = filepath.Join(kcoderDir, "Kcoder_settings.txt")
+
+	if _, err := os.Stat(kcoderDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(kcoderDir, 0755); err != nil {
+			log.Fatalf("failed to create Kcoder directory: %v", err)
+		}
+	}
+
+	return settingsFile, nil
 }
