@@ -1,4 +1,4 @@
-# Kcrypter
+# kcrypter
 
 This is a text encrypter i wrote motivated by my illusions of grandure.
 
